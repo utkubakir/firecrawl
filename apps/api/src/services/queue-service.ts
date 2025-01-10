@@ -1,14 +1,18 @@
 import { Queue } from "bullmq";
-import { Logger } from "../lib/logger";
+import { logger } from "../lib/logger";
 import IORedis from "ioredis";
 
 let scrapeQueue: Queue;
+let extractQueue: Queue;
+let loggingQueue: Queue;
 
-export const redisConnection = new IORedis(process.env.REDIS_URL, {
+export const redisConnection = new IORedis(process.env.REDIS_URL!, {
   maxRetriesPerRequest: null,
 });
 
 export const scrapeQueueName = "{scrapeQueue}";
+export const extractQueueName = "{extractQueue}";
+export const loggingQueueName = "{loggingQueue}";
 
 export function getScrapeQueue() {
   if (!scrapeQueue) {
@@ -25,21 +29,31 @@ export function getScrapeQueue() {
           },
         },
       }
-      //   {
-      //   settings: {
-      //     lockDuration: 1 * 60 * 1000, // 1 minute in milliseconds,
-      //     lockRenewTime: 15 * 1000, // 15 seconds in milliseconds
-      //     stalledInterval: 30 * 1000,
-      //     maxStalledCount: 10,
-      //   },
-      //   defaultJobOptions:{
-      //     attempts: 5
-      //   }
-      // }
     );
-    Logger.info("Web scraper queue created");
+    logger.info("Web scraper queue created");
   }
   return scrapeQueue;
+}
+
+export function getExtractQueue() {
+  if (!extractQueue) {
+    extractQueue = new Queue(
+      extractQueueName,
+      {
+        connection: redisConnection,
+        defaultJobOptions: {
+          removeOnComplete: {
+            age: 90000, // 25 hours
+          },
+          removeOnFail: {
+            age: 90000, // 25 hours
+          },
+        },
+      }
+    );
+    logger.info("Extraction queue created");
+  }
+  return extractQueue;
 }
 
 

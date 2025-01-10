@@ -62,7 +62,6 @@ TEST_API_KEY= # use if you've set up authentication and want to test with a real
 SCRAPING_BEE_API_KEY= # use if you'd like to use as a fallback scraper
 OPENAI_API_KEY= # add for LLM-dependent features (e.g., image alt generation)
 BULL_AUTH_KEY= @
-LOGTAIL_KEY= # Use if you're configuring basic logging with logtail
 PLAYWRIGHT_MICROSERVICE_URL=  # set if you'd like to run a playwright fallback
 LLAMAPARSE_API_KEY= #Set if you have a llamaparse key you'd like to use to parse pdfs
 SLACK_WEBHOOK_URL= # set if you'd like to send slack server health status messages
@@ -116,6 +115,10 @@ If you’d like to test the crawl endpoint, you can run this:
 ## Troubleshooting
 
 This section provides solutions to common issues you might encounter while setting up or running your self-hosted instance of Firecrawl.
+
+### API Keys for SDK Usage
+
+**Note:** When using Firecrawl SDKs with a self-hosted instance, API keys are optional. API keys are only required when connecting to the cloud service (api.firecrawl.dev).
 
 ### Supabase client is not configured
 

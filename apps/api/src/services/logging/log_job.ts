@@ -9,13 +9,56 @@ configDotenv();
 
 function cleanOfNull<T>(x: T): T {
   if (Array.isArray(x)) {
-    return x.map(x => cleanOfNull(x)) as T;
+    return x.map((x) => cleanOfNull(x)) as T;
   } else if (typeof x === "object" && x !== null) {
-    return Object.fromEntries(Object.entries(x).map(([k,v]) => [k,cleanOfNull(v)])) as T
+    return Object.fromEntries(
+      Object.entries(x).map(([k, v]) => [k, cleanOfNull(v)]),
+    ) as T;
   } else if (typeof x === "string") {
     return x.replaceAll("\u0000", "") as T;
   } else {
     return x;
+  }
+}
+
+async function indexJob(job: FirecrawlJob): Promise<void> {
+  try {
+    if (job.mode !== "single_urls" && job.mode !== "scrape") {
+      return;
+    }
+
+    const response = await fetch(`${process.env.FIRE_INDEX_SERVER_URL}/api/jobs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: job.url,
+        mode: job.mode || "scrape",
+        docs: job.docs,
+        origin: job.origin,
+        success: job.success,
+        time_taken: job.time_taken,
+        num_tokens: job.num_tokens,
+        page_options: job.scrapeOptions,
+        date_added: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      logger.error(`Failed to send job to external server: ${response.status} ${response.statusText}`, {
+        error: errorData,
+        scrapeId: job.job_id,
+      });
+    } else {
+      logger.debug("Job sent to external server successfully!", { scrapeId: job.job_id });
+    }
+  } catch (error) {
+    logger.error(`Error sending job to external server: ${error.message}`, {
+      error,
+      scrapeId: job.job_id,
+    });
   }
 }
 
@@ -48,7 +91,7 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
       num_docs: job.num_docs,
       docs: cleanOfNull(job.docs),
       time_taken: job.time_taken,
-      team_id: job.team_id === "preview" ? null : job.team_id,
+      team_id: (job.team_id === "preview" || job.team_id?.startsWith("preview_"))? null : job.team_id,
       mode: job.mode,
       url: job.url,
       crawler_options: job.crawlerOptions,
@@ -57,7 +100,13 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
       num_tokens: job.num_tokens,
       retry: !!job.retry,
       crawl_id: job.crawl_id,
+      tokens_billed: job.tokens_billed,
     };
+
+    // Send job to external server
+    if (process.env.FIRE_INDEX_SERVER_URL) {
+      indexJob(job);
+    }
 
     if (force) {
       let i = 0,
@@ -109,7 +158,7 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
     if (process.env.POSTHOG_API_KEY && !job.crawl_id) {
       let phLog = {
         distinctId: "from-api", //* To identify this on the group level, setting distinctid to a static string per posthog docs: https://posthog.com/docs/product-analytics/group-analytics#advanced-server-side-only-capturing-group-events-without-a-user
-        ...(job.team_id !== "preview" && {
+        ...((job.team_id !== "preview" && !job.team_id?.startsWith("preview_")) && {
           groups: { team: job.team_id },
         }), //* Identifying event on this team
         event: "job-logged",
@@ -118,7 +167,7 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
           message: job.message,
           num_docs: job.num_docs,
           time_taken: job.time_taken,
-          team_id: job.team_id === "preview" ? null : job.team_id,
+          team_id: (job.team_id === "preview" || job.team_id?.startsWith("preview_"))? null : job.team_id,
           mode: job.mode,
           url: job.url,
           crawler_options: job.crawlerOptions,
@@ -126,6 +175,7 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
           origin: job.origin,
           num_tokens: job.num_tokens,
           retry: job.retry,
+          tokens_billed: job.tokens_billed,
         },
       };
       if (job.mode !== "single_urls") {
